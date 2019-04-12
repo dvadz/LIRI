@@ -5,12 +5,13 @@ require("dotenv").config();
 var keys = require("./keys.js");
 var axios = require("axios");
 var moment = require("moment");
-var Spotify = require("node-spotify-api");
 var fs = require("fs");
+
+var Spotify = require("node-spotify-api");
 
 var spotify = new Spotify(keys.spotify);
 
-var debug = true;
+var userInputs = process.argv;
 
 var liriApp = {
     command: "",
@@ -18,33 +19,34 @@ var liriApp = {
     limit: 5
 }
 
-// console.log(liriApp.userInputs);
-// console.log(`The command: ${command}`);
-
-
 function start() {
-
     //check for user inputs
-    if(process.argv.length<3) {
+    if(userInputs.length<3) {
         console.log("No inputs were provided.");
         return false;
     }
     //get the command
-    liriApp.command = process.argv[2];
+    liriApp.command = userInputs[2];
+    //get the search words
+    liriApp.searchFor = userInputs.slice(3).join(" ");
+    
+    executeCommand();
+}
 
+function executeCommand() {
     //If a command was provided
     if(liriApp.command) {
         switch (liriApp.command){
             case "concert-this":
-                getSearchWords();
+                // getSearchWords();
                 get_concert();
                 break;
             case "spotify-this-song":
-                getSearchWords();
+                // getSearchWords();
                 go_spotify();
                 break;
             case "movie-this":
-                getSearchWords();
+                // getSearchWords();
                 get_movie();
                 break;
             case "do-what-it-says":
@@ -59,17 +61,21 @@ function start() {
         // TODO: another possible path, use inquirer to interact with user
         console.log("TODO: provide some options")
     }
-
 }
-
 
 function get_concert() {
     // let artist = liriApp.userInputs[3];
     let artist = liriApp.searchFor;
 
-    // TODO: check if artist is valid
-    // TODO: take of special chars as per doc
-    // TODO: support multiple words string
+    // just creating some space 
+    console.log("");
+
+    if(artist==='') {
+        artist = "ariana grande"
+        console.log(`Default artist => ${artist}`);
+    } else {
+        console.log(`Searching for => ${artist}`);
+    }
 
     const url = "https://rest.bandsintown.com/artists/" + artist + "/events?app_id=codingbootcamp";
 
@@ -88,22 +94,16 @@ function get_concert() {
         //yes we have a match
         } else if(response.status===200 && response.data!=0){
             
-            let count = 0;
-            //display the first 5 results
-            do{
-                if(count===0) console.log("==FIRST 5 RESULTS==");
+            let concertDate = moment(response.data[0].datetime);
 
-                let concertDate = moment(response.data[count].datetime);
-
-                console.log(`Venue: ${response.data[count].venue.name}`);
-                console.log(`Location: ${response.data[count].venue.city}, ${response.data[0].venue.region}, ${response.data[0].venue.country}`);
-                console.log(`Date: ${concertDate.format("MM/DD/YYYY")}`)   
-                console.log("===================")
-                count++
-            }while(count<response.data.length && count<liriApp.limit);
-            console.log(`Number of results : ${response.data.length}`);
+            var bandInfo = [
+                `Venue: ${response.data[0].venue.name}`,
+                `Location: + ${response.data[0].venue.city}, ${response.data[0].venue.region}, ${response.data[0].venue.country}`,
+                `Date: ${concertDate.format("MM/DD/YYYY")}`,   
+                `===================`
+            ].join("\n");
+            console.log(bandInfo);
         }
-            saveToFile(response);
     })
     .catch(function(error){
         console.log(`Please confirm the artist/band name: ${liriApp.searchFor}`);
@@ -111,32 +111,61 @@ function get_concert() {
 }
 
 function go_spotify() {
+    // Artist(s)
+    // The song's name
+    // A preview link of the song from Spotify
+    // The album that the song is from
+    // If no song is provided then your program will default to "The Sign" by Ace of Base.
+    let song = liriApp.searchFor;
+
+    //just creating some space
+    console.log("");
+
+    if(song==="") {
+        song = "The Sign"
+        console.log(`Default search => ${song}`);
+    } else {
+        console.log(`Search for => ${song}`);
+    }
+
     spotify
-    .search({ type: 'track', query: 'All the Small Things' })
+    .search({ type: 'track', query: song })
     .then(function(response) {
-      console.log(response);
+
+        let songInfo = [
+            `Artists: ${response.tracks.items[0].artists[0].name}`,
+            `Title: ${response.tracks.items[0].name}`,
+            `Preview: ${response.tracks.items[0].album.artists[0].external_urls.spotify}`,
+            `Album: ${response.tracks.items[0].album.name}`
+        ].join('\n');
+
+        // console.log(   response.tracks.items[0]);
+        // console.log("=================");
+        console.log(songInfo);
     })
     .catch(function(err) {
-      console.log(err);
+        console.log(err);
     });
 }
 
 function get_movie() {
-    // TODO: no movie title is provided
-    // var title = liriApp.userInputs[3];
     let title = liriApp.searchFor;
 
+    //just creating some space
+    console.log("");
+
     if(title==="") {
-        title = "Mr+Nobody"
+        title = "Mr Nobody"
+        console.log(`Default search => ${title}`);
+    } else {
+        console.log(`Searching for => ${title}`);
     }
-    var url = "http://www.omdbapi.com/?apikey=trilogy&t=" + title;
+
+    const url = "http://www.omdbapi.com/?apikey=trilogy&t=" + title;
 
     axios
     .get(url)
     .then(function(response){
-        // console.log("parsing OMDB response")
-        // console.log(response.data);
-        // console.log(url);
         let rottenTomatoesRating = "Not rated";
         //get the Rotten Tomatoes rating
         for(let i=0; i<response.data.Ratings.length; i++) {
@@ -145,16 +174,18 @@ function get_movie() {
                 break;
             }
         }
-            console.log("================")
-            console.log(`Title: ${response.data.Title}`);
-            console.log(`Year: ${response.data.Year}`);
-            console.log(`IMDB_Rating: ${response.data.imdbRating}`);
-            console.log(`Rotten Tomatoes Rating: ${rottenTomatoesRating}`);
-            console.log(`Country: ${response.data.Country}`);
-            console.log(`Language: ${response.data.Language}`);
-            console.log(`Actors: ${response.data.Actors}`);
-            console.log(`Plot: ${response.data.Plot}`);
-            console.log("================")
+            var movieInfo = [
+                `Title: ${response.data.Title}`,
+                `Year: ${response.data.Year}`,
+                `IMDB_Rating: ${response.data.imdbRating}`,
+                `Rotten Tomatoes Rating: ${rottenTomatoesRating}`,
+                `Country: ${response.data.Country}`,
+                `Language: ${response.data.Language}`,
+                `Actors: ${response.data.Actors}`,
+                `Plot: ${response.data.Plot}`
+            ].join('\n');
+            
+            console.log(movieInfo);
     })
     .catch(function(error){
         console.log("A problem was encountered while looking up your movie");
@@ -162,23 +193,41 @@ function get_movie() {
 }
 
 function simon_says() {
-    console.log("Let's do it");
+    //read the random.txt file
+    fs.readFile("random.txt","utf8", function(error, data){
+        if(error) {
+            console.log("Error: check the random.txt file");
+            return false;
+        }
+        //split data into an array for later parsing
+        let randomFile = data.split(",");
+        
 
+        if(randomFile.length<2) {
+            console.log("Error: random.txt must have at least 2 arguments.");
+        
+        //run the command            
+        } else {
+            liriApp.command = randomFile[0];
+            liriApp.searchFor = randomFile[1];
+            executeCommand();
+        }
+    });
 }
 
 function getSearchWords() {
 
     liriApp.searchFor = "";
-    let temp = [];
+    let search = [];
     
-    if(process.argv.length===4) {
-        liriApp.searchFor = process.argv[3]
+    if(userInputs.length===4) {
+        liriApp.searchFor = userInputs[3]
     } else {
-        for(let i = 3; i < process.argv.length; i++){
-            // liriApp.searchFor += process.argv[i] + '+';
-            temp.push(process.argv[i]);
+        for(let i = 3; i < userInputs.length; i++){
+            // liriApp.searchFor += userInputs[i] + '+';
+            search.push(userInputs[i]);
         }
-        liriApp.searchFor = temp.join("+");
+        liriApp.searchFor = search.join("+");
     }
 }
 
